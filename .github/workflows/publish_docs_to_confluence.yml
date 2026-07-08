@@ -1,0 +1,55 @@
+# ============================================================
+# File       : publish_docs_to_confluence.yml
+# Folder     : .github/workflows/
+# Purpose    : Auto-publish changed Markdown docs to Confluence on merge to prod
+# Trigger    : Push to prod branch (i.e. PR merged)
+# Created    : 2026-07-04
+# Author     : Sandy DataOps
+# Notes      : Requires GitHub Secrets: CONFLUENCE_USERNAME, CONFLUENCE_API_TOKEN
+# ============================================================
+
+name: Publish Docs to Confluence
+
+on:
+  push:
+    branches:
+      - prod
+    paths:
+      - "Sandy_Consulty_Business_docs/**/*.md"
+      - "Architecture_docs/**/*.md"
+
+jobs:
+  publish:
+    name: Publish changed Markdown to Confluence
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # needed to detect changed files vs previous commit
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r DataOps_Python/requirements.txt
+
+      - name: Detect changed Markdown files
+        id: changed_files
+        run: |
+          git diff --name-only HEAD~1 HEAD -- '*.md' | grep -E '^(Sandy_Consulty_Business_docs|Architecture_docs)/' > changed_docs.txt || true
+          echo "Changed docs:"
+          cat changed_docs.txt
+
+      - name: Publish each changed doc to Confluence
+        env:
+          CONFLUENCE_USERNAME: ${{ secrets.CONFLUENCE_USERNAME }}
+          CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+        run: |
+          while IFS= read -r file; do
+            echo "Publishing: $file"
+            python DataOps_Python/core/confluence_publisher.py "$file"
+          done < changed_docs.txt
